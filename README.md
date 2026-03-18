@@ -2,8 +2,6 @@
 
 A Retrieval-Augmented Generation (RAG) conversational system designed for the National Palace Museum exhibits.
 
-🌐 [Live Demo](#) · 📖 [Documentation](#) · 🕸️ [Knowledge Base](#) · 🤝 [Contribute](#)
-
 ![MIT License](https://img.shields.io/badge/License-MIT-green.svg) ![React](https://img.shields.io/badge/React-18-blue.svg) ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-00a393.svg)
 
 ---
