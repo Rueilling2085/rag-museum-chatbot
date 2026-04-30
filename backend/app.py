@@ -54,7 +54,8 @@ if os.path.exists(IMAGES_DIR):
 # ----------------------------------------------------------------------
 # 前端整合：Serving Frontend from /dist
 # ----------------------------------------------------------------------
-# 在 Zeabur 上，前端 dist 資料夾在 backend 的上一層（同個 repo）
+# 在 Zeabur 上，前後端同一個 container，前端 dist 在 /app/dist，後端在 /app/backend
+# 所以 ../dist 相對路徑正確對應到 /app/dist
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "../dist")
 FRONTEND_ASSETS = os.path.join(FRONTEND_DIST, "assets")
 
