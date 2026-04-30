@@ -27,7 +27,6 @@ import numpy as np
 import difflib
 
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 
