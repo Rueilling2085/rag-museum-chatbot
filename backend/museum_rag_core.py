@@ -32,7 +32,6 @@ from sklearn.metrics.pairwise import linear_kernel
 
 from PIL import Image as PILImage
 from PIL import ImageFilter
-from rembg import remove
 import PIL._util
 from io import BytesIO
 

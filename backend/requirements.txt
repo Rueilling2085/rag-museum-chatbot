@@ -12,7 +12,6 @@ PyYAML
 rank-bm25
 scikit-learn
 Pillow
-rembg[cpu]
 openai
 google-genai
 pypinyin
