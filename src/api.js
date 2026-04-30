@@ -1,14 +1,14 @@
 // src/assets/api.js
 
 // 後端 FastAPI 的 base URL
-const API_BASE = "http://127.0.0.1:8000";
+// 部署在 Zeabur 時，前後端同一網域，使用相對路徑即可
+// 本地開發時，請將此改為 "http://localhost:8000"
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 // 小工具：把後端回傳的 image_url 補上完整網址
 function withFullImageUrl(data) {
     if (data && data.image_url) {
-
         if (!data.image_url.startsWith("http")) {
-            // 確保網址與路徑之間有斜線
             const baseUrl = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
             const path = data.image_url.startsWith("/") ? data.image_url : `/${data.image_url}`;
             data.image_url = `${baseUrl}${path}`;
@@ -23,10 +23,9 @@ export async function searchArtifacts(question, signal = null) {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "bypass-tunnel-reminder": "true"
         },
         body: JSON.stringify({ question }),
-        signal: signal, // Add signal for abort support
+        signal: signal,
     });
 
     if (!res.ok) {
@@ -44,7 +43,6 @@ export async function sendChat(question, artifactName, signal = null) {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "bypass-tunnel-reminder": "true"
         },
         body: JSON.stringify({
             question,

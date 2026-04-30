@@ -21,6 +21,9 @@ env
 __pycache__/
 *.py[cod]
 *$py.class
+backend/__pycache__/
+backend/logs/
+backend/images/generated/
 
 # Environment variables
 .env
