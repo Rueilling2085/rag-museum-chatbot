@@ -205,9 +205,15 @@ function App() {
         artifactName,
         (event) => {
           if (event.type === "start") {
-            // 更新候選清單與鎖定文物 (如果是自動匹配到的話)
+            // 更新目前鎖定的文物名稱
             if (event.artifact_name) setActiveArtifact(event.artifact_name);
-            if (event.artifacts) setCandidates(event.artifacts);
+            
+            // 關鍵修正：只有在「沒有指定文物」的情況下，才需要顯示候選按鈕讓使用者選
+            if (!artifactName && event.artifacts) {
+              setCandidates(event.artifacts);
+            } else {
+              setCandidates([]); // 已有指定文物，強制清空按鈕
+            }
           } 
           else if (event.type === "sources") {
             // 收到來源後，確保訊息已建立並掛上去
