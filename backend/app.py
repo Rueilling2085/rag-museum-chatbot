@@ -214,7 +214,15 @@ async def chat_stream(payload: ChatRequest):
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(), 
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # 關鍵：告訴 Nginx 不要緩衝
+        }
+    )
 
 
 # ----------------------------------------------------------------------
