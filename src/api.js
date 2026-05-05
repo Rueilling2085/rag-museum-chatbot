@@ -59,3 +59,65 @@ export async function sendChat(question, artifactName, signal = null) {
     const data = await res.json(); // { answer, artifact_name, image_url, artifacts }
     return withFullImageUrl(data);
 }
+
+/**
+ * 方案 B：串流版本的聊天接口
+ * @param {string} question 
+ * @param {string} artifactName 
+ * @param {function} onEvent 回調函數，接收事件對象 { type, ... }
+ */
+export async function sendChatStream(question, artifactName, onEvent, signal = null) {
+    const res = await fetch(`${API_BASE}/chat/stream`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            question,
+            artifact_name: artifactName || null,
+        }),
+        signal: signal,
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`後端錯誤：${res.status} ${text}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        // SSE 格式是 data: <json>\n\n
+        let lines = buffer.split("\n\n");
+        buffer = lines.pop(); // 最後一個可能不完整
+
+        for (let line of lines) {
+            if (line.startsWith("data: ")) {
+                try {
+                    const jsonStr = line.replace("data: ", "").trim();
+                    const data = JSON.parse(jsonStr);
+                    
+                    // 如果是圖片事件，補全 URL
+                    if (data.type === "image" && data.image_url) {
+                        const baseUrl = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
+                        if (!data.image_url.startsWith("http")) {
+                            const path = data.image_url.startsWith("/") ? data.image_url : `/${data.image_url}`;
+                            data.image_url = `${baseUrl}${path}`;
+                        }
+                    }
+                    
+                    onEvent(data);
+                } catch (e) {
+                    console.error("解析串流 JSON 失敗:", e, line);
+                }
+            }
+        }
+    }
+}

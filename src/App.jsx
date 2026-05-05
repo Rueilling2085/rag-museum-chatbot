@@ -1,7 +1,7 @@
 // src/App.jsx
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
-import { searchArtifacts, sendChat } from "./api.js";
+import { searchArtifacts, sendChat, sendChatStream } from "./api.js";
 import { logToGoogleSheet } from "./logger.js";
 
 // Import some beautiful featured artifacts
@@ -180,37 +180,6 @@ function App() {
     return text.replace(/^(您好[！!，,\s]*|你好[！!，,\s]*|Hi[！!，,\s]*|Hello[！!，,\s]*)/i, '').trim();
   };
 
-  // 幫助函式：把 AI 回答加入 messages，並紀錄到 Google Sheet
-  const addAssistantAnswer = (result, questionText, confidence) => {
-    // 移除回答開頭的問候語
-    const cleanedAnswer = removeGreeting(result.answer || "(沒有回傳文字回答)");
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "assistant",
-        type: "text",
-        content: cleanedAnswer,
-        // 後端給的 sources 直接掛在這一則訊息底下
-        sources: result.sources || [],
-        artifactName: result.artifact_name, // 加入文物名稱
-      },
-      ...(result.image_url
-        ? [
-          {
-            role: "assistant",
-            type: "image",
-            content: result.image_url,
-            artifactName: result.artifact_name,
-          },
-        ]
-        : []),
-    ]);
-    setPendingQuestion(null);
-    setCandidates([]);
-    setManualArtifact("");
-    setActiveArtifact(result.artifact_name || null);
-
     // 紀錄到 Google Sheet
     logToGoogleSheet({
       question: questionText,
@@ -219,6 +188,104 @@ function App() {
       artifact_name: result.artifact_name,
       confidence_score: confidence,
     });
+  };
+
+  /**
+   * 核心串流處理邏輯 (方案 B)
+   */
+  const executeChatStream = async (questionText, artifactName) => {
+    setLoading(true);
+    abortControllerRef.current = new AbortController();
+
+    // 先建立一個空的助手訊息，準備接收串流內容
+    // 注意：這裡先不加到 messages，等收到第一個事件再說，避免空對話框
+    let hasAddedMessage = false;
+    let currentFullAnswer = "";
+
+    try {
+      await sendChatStream(
+        questionText,
+        artifactName,
+        (event) => {
+          if (event.type === "start") {
+            // 更新候選清單與鎖定文物 (如果是自動匹配到的話)
+            if (event.artifact_name) setActiveArtifact(event.artifact_name);
+            if (event.artifacts) setCandidates(event.artifacts);
+          } 
+          else if (event.type === "sources") {
+            // 收到來源後，確保訊息已建立並掛上去
+            ensureAssistantMessage();
+            setMessages(prev => {
+              const next = [...prev];
+              // 找到最新的一則文字訊息 (通常是倒數第一或第二)
+              for (let i = next.length - 1; i >= 0; i--) {
+                if (next[i].role === "assistant" && next[i].type === "text") {
+                  next[i].sources = event.sources;
+                  break;
+                }
+              }
+              return next;
+            });
+          }
+          else if (event.type === "text") {
+            ensureAssistantMessage();
+            currentFullAnswer += event.content;
+            setMessages(prev => {
+              const next = [...prev];
+              for (let i = next.length - 1; i >= 0; i--) {
+                if (next[i].role === "assistant" && next[i].type === "text") {
+                  next[i].content = removeGreeting(currentFullAnswer);
+                  break;
+                }
+              }
+              return next;
+            });
+          }
+          else if (event.type === "image") {
+            // 圖片獨立成一則訊息
+            setMessages(prev => [
+              ...prev,
+              {
+                role: "assistant",
+                type: "image",
+                content: event.image_url,
+                artifactName: artifactName || activeArtifact,
+              }
+            ]);
+          }
+          else if (event.type === "error") {
+             setMessages(prev => [...prev, { role: "assistant", type: "text", content: `錯誤: ${event.content || event.answer}` }]);
+          }
+        },
+        abortControllerRef.current.signal
+      );
+
+      // 結束後紀錄 (這時已經有完整 answer 和 image_url 了，但為了簡單，我們可以在 done 事件後補錄，
+      // 或者這裡直接略過 Google Sheet 紀錄，或稍後再補)
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      console.error(err);
+      setMessages(prev => [...prev, { role: "assistant", type: "text", content: `服務暫時無法連線: ${err.message}` }]);
+    } finally {
+      setLoading(false);
+      abortControllerRef.current = null;
+    }
+
+    function ensureAssistantMessage() {
+      if (!hasAddedMessage) {
+        setMessages(prev => [
+          ...prev,
+          {
+            role: "assistant",
+            type: "text",
+            content: "",
+            sources: [],
+            artifactName: artifactName || activeArtifact
+          }
+        ]);
+        hasAddedMessage = true;
+      }
+    }
   };
 
   // 停止當前請求
@@ -261,14 +328,12 @@ function App() {
         if (mentionedOther) {
           // 使用者文字中明確提到了另一個文物，直接自動切換上下文
           setActiveArtifact(mentionedOther.name);
-          const result = await sendChat(question, mentionedOther.name, abortControllerRef.current.signal);
-          addAssistantAnswer(result, question, "Auto-Shifted");
+          await executeChatStream(question, mentionedOther.name);
           return;
         }
 
         // 沒提到其他文物 -> 繼續使用目前的鎖定文物回答
-        const result = await sendChat(question, activeArtifact, abortControllerRef.current.signal);
-        addAssistantAnswer(result, question, "Context-Pinned");
+        await executeChatStream(question, activeArtifact);
         return;
       }
 
@@ -278,13 +343,11 @@ function App() {
 
       if (artifacts.length === 0) {
         // 找不到特定文物 → 直接讓後端用「不指定文物」回答
-        const answerResult = await sendChat(question, null, abortControllerRef.current.signal);
-        addAssistantAnswer(answerResult, question, "N/A");
+        await executeChatStream(question, null);
       } else if (artifacts.length === 1) {
         // 只有一個文物 → 自動用這件
         const only = artifacts[0];
-        const answerResult = await sendChat(question, only.name, abortControllerRef.current.signal);
-        addAssistantAnswer(answerResult, question, only.score || 1.0);
+        await executeChatStream(question, only.name);
       } else {
         // 有多件文物 → 先請使用者選
         setPendingQuestion(question);
@@ -340,9 +403,9 @@ function App() {
     abortControllerRef.current = new AbortController();
 
     try {
-      const result = await sendChat(pendingQuestion, artifact.name, abortControllerRef.current.signal);
-      setActiveArtifact(artifact.name); // 鎖定目前文物
-      addAssistantAnswer(result, pendingQuestion, artifact.score || "Selected");
+      await executeChatStream(pendingQuestion, artifact.name);
+      setPendingQuestion(null);
+      setCandidates([]);
     } catch (err) {
       if (err.name === 'AbortError') {
         console.log('Request was cancelled');
@@ -385,9 +448,10 @@ function App() {
     abortControllerRef.current = new AbortController();
 
     try {
-      const result = await sendChat(pendingQuestion, name, abortControllerRef.current.signal);
-      setActiveArtifact(name); // 鎖定目前文物
-      addAssistantAnswer(result, pendingQuestion, "Manual");
+      await executeChatStream(pendingQuestion, name);
+      setPendingQuestion(null);
+      setCandidates([]);
+      setManualArtifact("");
     } catch (err) {
       if (err.name === 'AbortError') {
         console.log('Request was cancelled');

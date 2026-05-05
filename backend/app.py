@@ -13,12 +13,13 @@ mimetypes.add_type("application/javascript", ".mjs")
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from openpyxl import Workbook
 
 from museum_rag_core import (
     rag_answer,
+    rag_answer_stream,
     IMAGES_DIR,
     IMAGES_WEB_ROOT,       # museum_rag_core 裡已設成 "/static"
     retrieve_two_domains,
@@ -195,6 +196,25 @@ async def chat(payload: ChatRequest) -> Dict[str, Any]:
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/chat/stream")
+async def chat_stream(payload: ChatRequest):
+    """
+    SSE 版本的聊天接口。
+    """
+    async def event_generator():
+        try:
+            async for event in rag_answer_stream(
+                question=payload.question,
+                artifact_name=payload.artifact_name
+            ):
+                # SSE 格式: data: <json>\n\n
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 # ----------------------------------------------------------------------

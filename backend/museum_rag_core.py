@@ -35,7 +35,7 @@ from PIL import ImageFilter
 import PIL._util
 from io import BytesIO
 
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from google import genai
 from google.genai import types
 
@@ -84,27 +84,31 @@ print(f"[RAG] 資料目錄: {BASE_DIR}")
 
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 _openai_client: Optional[OpenAI] = None
+_async_openai_client: Optional[AsyncOpenAI] = None
 USE_LLM = False
 
 
 def init_openai() -> None:
     """從環境變數讀取 OPENAI_API_KEY，初始化文字模型。"""
-    global _openai_client, USE_LLM
+    global _openai_client, _async_openai_client, USE_LLM
     key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not key:
         print("[RAG] 未設定 OPENAI_API_KEY，將只回傳檢索片段，不使用 LLM 生成導覽。")
         USE_LLM = False
         _openai_client = None
+        _async_openai_client = None
         return
 
     try:
         _openai_client = OpenAI(api_key=key)
+        _async_openai_client = AsyncOpenAI(api_key=key)
         USE_LLM = True
         print(f"[RAG] OpenAI 初始化成功，model = {OPENAI_MODEL}")
     except Exception as e:
         print(f"[RAG] OpenAI 初始化失敗：{e}，改為只回傳檢索片段。")
         USE_LLM = False
         _openai_client = None
+        _async_openai_client = None
 
 
 init_openai()
@@ -1163,3 +1167,109 @@ def rag_answer(
         "artifacts": artifacts,
         "sources": ui_sources,
     }
+
+
+async def rag_answer_stream(
+    question: str, artifact_name: Optional[str] = None
+):
+    """
+    非同步串流版本的 RAG 回答。
+    透過 yield 傳送不同階段的 SSE 資料包。
+    """
+    import asyncio
+
+    # 1) 檢索 (同步執行，這部分通常很快)
+    hits_basic, hits_hong, effective_name = retrieve_two_domains(question, artifact_name=artifact_name)
+    
+    top_matched_names = []
+    if not artifact_name:
+        fuzzy_matches = find_best_artifact_match(question)
+        top_matched_names = [m[0] for m in fuzzy_matches if m[1] > 0.75]
+
+    all_docs = (hits_basic or []) + (hits_hong or [])
+    artifacts = list_artifacts_from_docs(all_docs, top_priority_names=top_matched_names)
+
+    # 先傳送第一波 Metadata (文物清單與鎖定名稱)
+    yield {
+        "type": "start",
+        "artifact_name": effective_name,
+        "artifacts": artifacts
+    }
+
+    if not artifacts and not all_docs:
+        yield {
+            "type": "error",
+            "answer": "您好！目前資料庫中沒有與此問題相關的內容。"
+        }
+        return
+
+    selected_name = effective_name
+    if selected_name:
+        hits_basic_f = [d for d in (hits_basic or []) if (d.metadata.get("object_name") or "").strip() == selected_name]
+        hits_hong_f = [d for d in (hits_hong or []) if (d.metadata.get("object_name") or "").strip() == selected_name]
+    else:
+        hits_basic_f, hits_hong_f = hits_basic, hits_hong
+        selected_name = artifacts[0]["name"] if artifacts else None
+
+    # 傳送來源 (Sources) - 這裡如果 build_ui_sources 太慢，可以考慮分段傳送
+    # 目前先整包傳，因為這裡通常比生圖快
+    ui_sources = build_ui_sources(hits_basic_f, hits_hong_f, question=question, max_items=3)
+    yield {
+        "type": "sources",
+        "sources": ui_sources
+    }
+
+    # 2) 串流文字導覽
+    context = build_context_for_prompt(hits_basic_f, hits_hong_f)
+    prompt = PROMPT_TMPL.format(question=question, context=context)
+    
+    full_answer = ""
+    if _async_openai_client:
+        try:
+            stream = await _async_openai_client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": "你是一位專業的博物館導覽員。"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                stream=True
+            )
+            async for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content:
+                    full_answer += content
+                    yield {"type": "text", "content": content}
+        except Exception as e:
+            yield {"type": "error", "content": f"OpenAI Stream Error: {e}"}
+    else:
+        # Fallback to non-stream if client not available
+        full_answer = "（尚未設定 OpenAI API Key，無法串流回答）"
+        yield {"type": "text", "content": full_answer}
+
+    # 3) 圖像生成 (最後一步，最慢)
+    # 這裡我們已經拿到 full_answer 了，可以用它來生圖
+    if selected_name:
+        # 讓生圖在 ThreadPool 中執行，避免卡住 async loop (雖然這裡是 generator 的最後一步，但養成好習慣)
+        loop = asyncio.get_event_loop()
+        scene_url = await loop.run_in_executor(
+            None, generate_composite_image_and_get_url, selected_name, question, full_answer
+        )
+        
+        image_url = None
+        if scene_url:
+            image_url = scene_url
+        else:
+            # FALLBACK
+            matched_file = smart_match_filename(selected_name)
+            if matched_file:
+                filename = os.path.basename(matched_file)
+                image_url = f"{IMAGES_WEB_ROOT}/original/{filename}"
+        
+        if image_url:
+            yield {
+                "type": "image",
+                "image_url": image_url
+            }
+
+    yield {"type": "done"}
