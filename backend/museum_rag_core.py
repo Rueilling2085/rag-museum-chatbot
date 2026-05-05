@@ -1250,7 +1250,9 @@ async def rag_answer_stream(
     # 3) 圖像生成 (最後一步，最慢)
     # 這裡我們已經拿到 full_answer 了，可以用它來生圖
     if selected_name:
-        # 讓生圖在 ThreadPool 中執行，避免卡住 async loop (雖然這裡是 generator 的最後一步，但養成好習慣)
+        yield {"type": "processing_image"}
+        
+        # 讓生圖在 ThreadPool 中執行
         loop = asyncio.get_event_loop()
         scene_url = await loop.run_in_executor(
             None, generate_composite_image_and_get_url, selected_name, question, full_answer

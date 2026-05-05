@@ -128,6 +128,7 @@ function App() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState("searching"); // searching, answering, imaging
   const [isPromptMenuOpen, setIsPromptMenuOpen] = useState(false);
   
   // 全部館藏的檢索視窗
@@ -185,6 +186,7 @@ function App() {
    */
   const executeChatStream = async (questionText, artifactName) => {
     setLoading(true);
+    setLoadingStatus("searching");
     abortControllerRef.current = new AbortController();
 
     // 先建立一個空的助手訊息，準備接收串流內容
@@ -218,6 +220,7 @@ function App() {
             });
           }
           else if (event.type === "text") {
+            setLoadingStatus("answering");
             ensureAssistantMessage();
             currentFullAnswer += event.content;
             setMessages(prev => {
@@ -231,7 +234,11 @@ function App() {
               return next;
             });
           }
+          else if (event.type === "processing_image") {
+            setLoadingStatus("imaging");
+          }
           else if (event.type === "image") {
+            setLoadingStatus("done");
             // 圖片獨立成一則訊息
             setMessages(prev => [
               ...prev,
@@ -813,7 +820,13 @@ function App() {
                         </div>
                         <div className="msg-content-wrapper">
                           <div className="msg-bubble loading-bubble">
-                            <span>正在為您檢索館藏資料中</span>
+                            <span>
+                              {loadingStatus === "imaging" 
+                                ? "正在為您生成情境圖" 
+                                : loadingStatus === "answering" 
+                                  ? "正在整理導覽內容" 
+                                  : "正在為您檢索館藏資料中"}
+                            </span>
                             <div className="typing-indicator">
                               <span></span>
                               <span></span>
