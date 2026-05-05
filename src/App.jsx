@@ -180,16 +180,6 @@ function App() {
     return text.replace(/^(您好[！!，,\s]*|你好[！!，,\s]*|Hi[！!，,\s]*|Hello[！!，,\s]*)/i, '').trim();
   };
 
-    // 紀錄到 Google Sheet
-    logToGoogleSheet({
-      question: questionText,
-      answer: result.answer,
-      image_url: result.image_url,
-      artifact_name: result.artifact_name,
-      confidence_score: confidence,
-    });
-  };
-
   /**
    * 核心串流處理邏輯 (方案 B)
    */
