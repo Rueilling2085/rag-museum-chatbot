@@ -187,6 +187,11 @@ function App() {
   const executeChatStream = async (questionText, artifactName) => {
     setLoading(true);
     setLoadingStatus("searching");
+    // 如果已經確定要進入回答流程，就清空候選狀態，避免 UI 殘留
+    setPendingQuestion(null);
+    setCandidates([]);
+    setManualArtifact("");
+    
     abortControllerRef.current = new AbortController();
 
     // 先建立一個空的助手訊息，準備接收串流內容
@@ -401,8 +406,6 @@ function App() {
 
     try {
       await executeChatStream(pendingQuestion, artifact.name);
-      setPendingQuestion(null);
-      setCandidates([]);
     } catch (err) {
       if (err.name === 'AbortError') {
         console.log('Request was cancelled');
@@ -446,9 +449,6 @@ function App() {
 
     try {
       await executeChatStream(pendingQuestion, name);
-      setPendingQuestion(null);
-      setCandidates([]);
-      setManualArtifact("");
     } catch (err) {
       if (err.name === 'AbortError') {
         console.log('Request was cancelled');
