@@ -216,6 +216,7 @@ function App() {
             }
           } 
           else if (event.type === "sources") {
+            setLoadingStatus("answering");
             // 收到來源後，確保訊息已建立並掛上去
             ensureAssistantMessage();
             setMessages(prev => {
@@ -246,6 +247,7 @@ function App() {
             });
           }
           else if (event.type === "processing_image") {
+            console.log("Switching to imaging status");
             setLoadingStatus("imaging");
           }
           else if (event.type === "image") {

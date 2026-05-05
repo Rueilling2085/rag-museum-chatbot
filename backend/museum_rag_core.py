@@ -1243,14 +1243,13 @@ async def rag_answer_stream(
         except Exception as e:
             yield {"type": "error", "content": f"OpenAI Stream Error: {e}"}
     else:
-        # Fallback to non-stream if client not available
         full_answer = "（尚未設定 OpenAI API Key，無法串流回答）"
         yield {"type": "text", "content": full_answer}
 
     # 3) 圖像生成 (最後一步，最慢)
-    # 這裡我們已經拿到 full_answer 了，可以用它來生圖
     if selected_name:
         yield {"type": "processing_image"}
+        print(f"[RAG][STREAM] 正在為 {selected_name} 生成情境圖...")
         
         # 讓生圖在 ThreadPool 中執行
         loop = asyncio.get_event_loop()
