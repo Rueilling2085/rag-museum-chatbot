@@ -166,7 +166,7 @@ function App() {
       const canvas = await html2canvas(exportAreaRef.current, {
         useCORS: true,
         scale: 2,
-        backgroundColor: "#1a1a1a", // match the dark mode background
+        backgroundColor: "#ffffff", // match the light mode background
       });
       const dataUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
@@ -762,7 +762,7 @@ function App() {
                     </div>
                   </header>
 
-              <main className="chat-container" ref={exportAreaRef} style={{ backgroundColor: '#1a1a1a' }}>
+              <main className="chat-container" ref={exportAreaRef}>
                 <div className="messages-area">
                   <div className="messages">
 
