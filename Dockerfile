@@ -24,10 +24,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安裝系統依賴（rembg/Pillow 需要）
-RUN apt-get update && apt-get install -y \
-    libgl1 \
-    libglib2.0-0 \
+# 安裝系統依賴（numpy/sklearn 需要 libgomp1）
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 

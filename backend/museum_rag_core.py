@@ -27,21 +27,26 @@ import numpy as np
 import difflib
 
 from rank_bm25 import BM25Okapi
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import linear_kernel
+# sklearn: 延遲載入以節省記憶體
+# from sklearn.feature_extraction.text import TfidfVectorizer
+# from sklearn.metrics.pairwise import linear_kernel
 
-from PIL import Image as PILImage
-from PIL import ImageFilter
-import PIL._util
+# Pillow: 延遲載入以節省記憶體
+# from PIL import Image as PILImage
+# from PIL import ImageFilter
+# import PIL._util
 from io import BytesIO
 
 from openai import OpenAI, AsyncOpenAI
 from google import genai
 from google.genai import types
 
-# Pillow 相容修補（某些版本會缺 is_directory）
-if not hasattr(PIL._util, "is_directory"):
-    PIL._util.is_directory = lambda path: os.path.isdir(path)
+# Pillow 相容修補移至延遲載入時處理
+def _ensure_pillow():
+    """延遲載入 Pillow 並處理相容性問題"""
+    import PIL._util
+    if not hasattr(PIL._util, "is_directory"):
+        PIL._util.is_directory = lambda path: os.path.isdir(path)
 
 # --- 手動載入 .env 檔案 (不依賴 python-dotenv) ---
 ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
@@ -251,7 +256,7 @@ def _get_embedding_client():
 def _embed_texts(texts: List[str], is_query: bool) -> np.ndarray:
     client = _get_embedding_client()
     if not client:
-        return np.zeros((len(texts), 1536), dtype="float32")
+        return np.zeros((len(texts), 1536), dtype="float16")
     
     try:
         # 使用 text-embedding-3-small, 這是目前最便宜且強大的模型
@@ -259,14 +264,14 @@ def _embed_texts(texts: List[str], is_query: bool) -> np.ndarray:
             input=texts,
             model="text-embedding-3-small"
         )
-        return np.array([item.embedding for item in resp.data], dtype="float32")
+        return np.array([item.embedding for item in resp.data], dtype="float16")
     except Exception as e:
         print(f"[RAG][EMB] Embedding 失敗: {e}")
-        return np.zeros((len(texts), 1536), dtype="float32")
+        return np.zeros((len(texts), 1536), dtype="float16")
 
 def _embed_docs(docs: List[Document]) -> np.ndarray:
     if not docs:
-        return np.zeros((0, 1536), dtype="float32")
+        return np.zeros((0, 1536), dtype="float16")
     texts = [d.page_content for d in docs]
     # OpenAI 有限制一次輸入的數量，我們分批處理 (Batching)
     batch_size = 100
@@ -276,8 +281,9 @@ def _embed_docs(docs: List[Document]) -> np.ndarray:
         vecs = _embed_texts(batch, is_query=False)
         all_vecs.append(vecs)
     
-    res = np.vstack(all_vecs)
-    return res / (np.linalg.norm(res, axis=1, keepdims=True) + 1e-8)
+    res = np.vstack(all_vecs).astype("float32")  # 歸一化時用 float32 確保精度
+    res = res / (np.linalg.norm(res, axis=1, keepdims=True) + 1e-8)
+    return res.astype("float16")  # 歸一化後轉回 float16 節省記憶體
 
 def _embed_query(q: str) -> np.ndarray:
     v = _embed_texts([q], is_query=True)[0]
@@ -437,7 +443,8 @@ class NumpyVectorRetriever:
         # 確保維度一致
         if self.mat.shape[1] != q.shape[0]:
             return []
-        sims = self.mat @ q
+        # float16 矩陣乘法可能溢出，轉 float32 計算
+        sims = self.mat.astype("float32") @ q.astype("float32")
         return [self.docs[i] for i in np.argsort(-sims)[: self.k]]
 
 
@@ -445,12 +452,19 @@ class BM25Retriever:
     def __init__(self, docs: List[Document], k: int):
         self.docs = docs
         self.k = k
-        self.bm25 = BM25Okapi([zh_tokens(d.page_content) for d in docs]) if docs else None
+        self._bm25 = None  # 延遲建立，節省啟動記憶體
+
+    def _ensure_index(self):
+        """第一次查詢時才建立 BM25 索引"""
+        if self._bm25 is None and self.docs:
+            print("[RAG][BM25] 正在建立 BM25 索引（延遲載入）...")
+            self._bm25 = BM25Okapi([zh_tokens(d.page_content) for d in self.docs])
 
     def search(self, query: str) -> List[Document]:
-        if not self.bm25:
+        self._ensure_index()
+        if not self._bm25:
             return []
-        scores = self.bm25.get_scores(zh_tokens(query))
+        scores = self._bm25.get_scores(zh_tokens(query))
         return [self.docs[i] for i in np.argsort(-scores)[: self.k]]
 
 
@@ -479,6 +493,8 @@ def merge_dedup(dlists: List[List[Document]], limit: int) -> List[Document]:
 def tfidf_rerank(docs: List[Document], query: str, top_n: int) -> List[Document]:
     if not docs:
         return []
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import linear_kernel
     texts = [d.page_content for d in docs]
     vectorizer = TfidfVectorizer(tokenizer=zh_tokens, max_features=20000)
     X = vectorizer.fit_transform(texts + [query])
@@ -928,6 +944,8 @@ def generate_composite_image_and_get_url(
         return None
 
     try:
+        from PIL import Image as PILImage
+        _ensure_pillow()
         ref_img = PILImage.open(img_path).convert("RGB")
     except Exception as e:
         print("[RAG][IMG] 讀取原始圖片失敗:", e)
