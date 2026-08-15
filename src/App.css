@@ -33,11 +33,19 @@
 
 body {
   margin: 0;
-  background-color: transparent;
+  background-color: var(--bg-dark-grey);
   color: var(--text-main);
-  display: flex;
-  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
   font-family: "Noto Sans TC", "Noto Sans", sans-serif;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 button, input, textarea, select {
