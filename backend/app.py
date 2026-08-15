@@ -204,13 +204,40 @@ async def chat_stream(payload: ChatRequest):
     SSE 版本的聊天接口。
     """
     async def event_generator():
+        full_answer = ""
+        image_url = None
+        artifacts_list = []
         try:
             async for event in rag_answer_stream(
                 question=payload.question,
                 artifact_name=payload.artifact_name
             ):
+                # 收集生成的內容準備存入 log
+                event_type = event.get("type")
+                if event_type == "text":
+                    full_answer += event.get("content", "")
+                elif event_type == "error":
+                    # 捕捉沒有資料時的回退訊息
+                    full_answer += event.get("answer", "") or event.get("content", "")
+                elif event_type == "artifacts":
+                    artifacts_list = event.get("data", [])
+                elif event_type == "image":
+                    image_url = event.get("image_url", "")  # 注意：在 museum_rag_core 裡面是 image_url 而不是 url
+
                 # SSE 格式: data: <json>\n\n
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            
+            # 在串流結束時，將完整對話寫入 jsonl 紀錄檔
+            log_event(
+                {
+                    "endpoint": "/chat/stream",
+                    "question": payload.question,
+                    "artifact_name": payload.artifact_name,
+                    "answer": full_answer,
+                    "image_url": image_url,
+                    "artifacts": artifacts_list,
+                }
+            )
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
 
@@ -304,3 +331,9 @@ async def serve_spa(full_path: str):
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {"status": "ok", "message": "Backend running, frontend not found."}
+
+@app.get("/debug/assets")
+async def debug_assets():
+    if os.path.exists(FRONTEND_ASSETS):
+        return {"files": os.listdir(FRONTEND_ASSETS)}
+    return {"error": "FRONTEND_ASSETS does not exist"}
