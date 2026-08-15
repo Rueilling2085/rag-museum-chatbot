@@ -642,8 +642,11 @@ function App() {
               <path d="M1 10.5h3V14H1v-3.5zm4.5-3.5h3V14h-3V7zm4.5-3.5h3V14h-3V3.5zm4.5-3.5h3V14h-3V0z"/>
             </svg>
             {/* WiFi Icon */}
-            <svg className="ios-wifi" viewBox="0 0 18 14" fill="currentColor">
-              <path d="M9 14c-1.8 0-3.4-.6-4.7-1.6l1.2-1.5c1 .8 2.2 1.1 3.5 1.1s2.5-.3 3.5-1.1l1.2 1.5C12.4 13.4 10.8 14 9 14zm0-4.5c-2.8 0-5.3-1-7.2-2.7L3 5.3c1.6 1.4 3.7 2.2 6 2.2s4.4-.8 6-2.2l1.2 1.5C14.3 8.5 11.8 9.5 9 9.5zM9 5C5.5 5 2.4 3.7.1 1.5L1.5 0C3.5 1.9 6.1 3 9 3s5.5-1.1 7.5-3l1.4 1.5C15.6 3.7 12.5 5 9 5z"/>
+            <svg className="ios-wifi" viewBox="0 0 21 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="10.5" cy="14.5" r="1.5" fill="currentColor"/>
+              <path d="M 7 11 A 5 5 0 0 1 14 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              <path d="M 4 8 A 9.2 9.2 0 0 1 17 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              <path d="M 1 5 A 13.5 13.5 0 0 1 20 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
             </svg>
             {/* Battery Icon */}
             <div className="ios-battery">
