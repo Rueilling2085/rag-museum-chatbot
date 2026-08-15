@@ -944,9 +944,19 @@ def generate_composite_image_and_get_url(
         return None
 
     try:
-        from PIL import Image as PILImage
-        _ensure_pillow()
-        ref_img = PILImage.open(img_path).convert("RGB")
+        # 直接讀取檔案二進位資料，避免使用 Pillow 解碼進記憶體造成 OOM
+        with open(img_path, "rb") as f:
+            img_bytes = f.read()
+        
+        ext = img_path.split('.')[-1].lower()
+        if ext in ['jpg', 'jpeg']:
+            mime_type = "image/jpeg"
+        elif ext == 'webp':
+            mime_type = "image/webp"
+        else:
+            mime_type = "image/png"
+            
+        image_part = types.Part.from_bytes(mime_type=mime_type, data=img_bytes)
     except Exception as e:
         print("[RAG][IMG] 讀取原始圖片失敗:", e)
         return None
@@ -969,11 +979,6 @@ Important:
 - Do NOT generate square or horizontal images.
 - No text, labels, or UI elements inside the image.
     """.strip()
-
-    buf = BytesIO()
-    ref_img.save(buf, format="PNG")
-    img_bytes = buf.getvalue()
-    image_part = types.Part.from_bytes(mime_type="image/png", data=img_bytes)
 
     try:
         print("[RAG][IMG] 呼叫 Gemini 2.5 圖像生成中...")
