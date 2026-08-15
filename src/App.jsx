@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import "./App.css";
 import { searchArtifacts, sendChat, sendChatStream } from "./api.js";
 import { logToGoogleSheet } from "./logger.js";
+import html2canvas from "html2canvas";
 
 // Import some beautiful featured artifacts
 import img1 from "./assets/artifacts/仿官釉青瓷筆筒_2.jpg";
@@ -154,6 +155,32 @@ function App() {
   // 每一則訊息的「附註是否展開」
   const [openSourcesMap, setOpenSourcesMap] = useState({});
 
+  // 用於匯出成圖片的參考
+  const exportAreaRef = useRef(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportImage = async () => {
+    if (!exportAreaRef.current) return;
+    setIsExporting(true);
+    try {
+      const canvas = await html2canvas(exportAreaRef.current, {
+        useCORS: true,
+        scale: 2,
+        backgroundColor: "#1a1a1a", // match the dark mode background
+      });
+      const dataUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.download = `museum_chat_${new Date().getTime()}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error("Export failed", err);
+      alert("匯出圖片失敗，請稍後再試！");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // 用於自動滾動到底部
   const messagesEndRef = useRef(null);
   const scrollToBottom = () => {
@@ -184,7 +211,7 @@ function App() {
   /**
    * 核心串流處理邏輯 (方案 B)
    */
-  const executeChatStream = async (questionText, artifactName) => {
+  const executeChatStream = async (questionText, artifactName, confidenceScore = "") => {
     setLoading(true);
     setLoadingStatus("searching");
     // 如果已經確定要進入回答流程，就清空候選狀態，避免 UI 殘留
@@ -198,6 +225,8 @@ function App() {
     // 注意：這裡先不加到 messages，等收到第一個事件再說，避免空對話框
     let hasAddedMessage = false;
     let currentFullAnswer = "";
+    let finalImageUrl = "";
+    let resolvedArtifactName = artifactName || "";
 
     try {
       await sendChatStream(
@@ -206,7 +235,10 @@ function App() {
         (event) => {
           if (event.type === "start") {
             // 更新目前鎖定的文物名稱
-            if (event.artifact_name) setActiveArtifact(event.artifact_name);
+            if (event.artifact_name) {
+              setActiveArtifact(event.artifact_name);
+              resolvedArtifactName = event.artifact_name;
+            }
             
             // 關鍵修正：只有在「沒有指定文物」的情況下，才需要顯示候選按鈕讓使用者選
             if (!artifactName && event.artifacts) {
@@ -252,6 +284,7 @@ function App() {
           }
           else if (event.type === "image") {
             setLoadingStatus("done");
+            finalImageUrl = event.image_url;
             // 圖片獨立成一則訊息
             setMessages(prev => [
               ...prev,
@@ -259,7 +292,7 @@ function App() {
                 role: "assistant",
                 type: "image",
                 content: event.image_url,
-                artifactName: artifactName || activeArtifact,
+                artifactName: artifactName || activeArtifact || resolvedArtifactName,
               }
             ]);
           }
@@ -270,8 +303,15 @@ function App() {
         abortControllerRef.current.signal
       );
 
-      // 結束後紀錄 (這時已經有完整 answer 和 image_url 了，但為了簡單，我們可以在 done 事件後補錄，
-      // 或者這裡直接略過 Google Sheet 紀錄，或稍後再補)
+      // 結束後紀錄至 Google Sheet
+      logToGoogleSheet({
+        question: questionText,
+        answer: removeGreeting(currentFullAnswer),
+        image_url: finalImageUrl,
+        artifact_name: resolvedArtifactName || activeArtifact || "",
+        confidence_score: confidenceScore
+      });
+
     } catch (err) {
       if (err.name === 'AbortError') return;
       console.error(err);
@@ -290,7 +330,7 @@ function App() {
             type: "text",
             content: "",
             sources: [],
-            artifactName: artifactName || activeArtifact
+            artifactName: artifactName || activeArtifact || resolvedArtifactName
           }
         ]);
         hasAddedMessage = true;
@@ -338,12 +378,11 @@ function App() {
         if (mentionedOther) {
           // 使用者文字中明確提到了另一個文物，直接自動切換上下文
           setActiveArtifact(mentionedOther.name);
-          await executeChatStream(question, mentionedOther.name);
-          return;
+          await executeChatStream(question, mentionedOther.name, 1.0);
+        } else {
+          // 沒提到其他文物 -> 繼續使用目前的鎖定文物回答
+          await executeChatStream(question, activeArtifact, 1.0);
         }
-
-        // 沒提到其他文物 -> 繼續使用目前的鎖定文物回答
-        await executeChatStream(question, activeArtifact);
         return;
       }
 
@@ -357,7 +396,7 @@ function App() {
       } else if (artifacts.length === 1) {
         // 只有一個文物 → 自動用這件
         const only = artifacts[0];
-        await executeChatStream(question, only.name);
+        await executeChatStream(question, only.name, only.score);
       } else {
         // 有多件文物 → 先請使用者選
         setPendingQuestion(question);
@@ -413,7 +452,7 @@ function App() {
     abortControllerRef.current = new AbortController();
 
     try {
-      await executeChatStream(pendingQuestion, artifact.name);
+      await executeChatStream(pendingQuestion, artifact.name, artifact.score);
     } catch (err) {
       if (err.name === 'AbortError') {
         console.log('Request was cancelled');
@@ -456,7 +495,7 @@ function App() {
     abortControllerRef.current = new AbortController();
 
     try {
-      await executeChatStream(pendingQuestion, name);
+      await executeChatStream(pendingQuestion, name, "");
     } catch (err) {
       if (err.name === 'AbortError') {
         console.log('Request was cancelled');
@@ -589,12 +628,8 @@ function App() {
 
   return (
     <>
-      <div className="iphone-wrapper">
-        <div className="iphone-frame">
-          <div className="iphone-screen">
-
-            <div className="app-root">
-              
+      <div className="app-root">
+        
               {viewMode === 'landing' ? (
                 /* 展覽首頁視圖 */
                 <>
@@ -670,33 +705,64 @@ function App() {
                       </svg>
                     </button>
                     <h1>{activeArtifact ? activeArtifact : "博物館 AI 導覽系統"}</h1>
-                    <button
-                      className={`artifact-menu-btn ${activeArtifact ? "has-artifact" : ""}`}
-                      onClick={() => {
-                        setIsCatalogOpen(true);
-                        setWaitingForPromptMenu(!!activeArtifact);
-                      }}
-                      title={activeArtifact ? `目前：${activeArtifact} （點擊切換）` : "選擇文物"}
-                    >
-                      {activeArtifact ? (
-                        <>
-                          <img
-                            src={ALL_ARTIFACTS.find(a => a.name === activeArtifact)?.image || ""}
-                            alt={activeArtifact}
-                            className="artifact-menu-thumb"
-                            onError={e => { e.target.style.display = "none"; }}
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <span className="artifact-menu-fallback-icon">🏛️</span>
-                        </>
-                      )}
-                      <span className="selector-chevron">▾</span>
-                    </button>
+                    
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        className="export-image-btn"
+                        onClick={handleExportImage}
+                        title="截圖/匯出對話圖片"
+                        disabled={isExporting}
+                        style={{
+                          background: 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          padding: '6px 10px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        {isExporting ? (
+                          <span style={{ fontSize: '14px' }}>⏳</span>
+                        ) : (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                          </svg>
+                        )}
+                      </button>
+
+                      <button
+                        className={`artifact-menu-btn ${activeArtifact ? "has-artifact" : ""}`}
+                        onClick={() => {
+                          setIsCatalogOpen(true);
+                          setWaitingForPromptMenu(!!activeArtifact);
+                        }}
+                        title={activeArtifact ? `目前：${activeArtifact} （點擊切換）` : "選擇文物"}
+                      >
+                        {activeArtifact ? (
+                          <>
+                            <img
+                              src={ALL_ARTIFACTS.find(a => a.name === activeArtifact)?.image || ""}
+                              alt={activeArtifact}
+                              className="artifact-menu-thumb"
+                              onError={e => { e.target.style.display = "none"; }}
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <span className="artifact-menu-fallback-icon">🏛️</span>
+                          </>
+                        )}
+                        <span className="selector-chevron">▾</span>
+                      </button>
+                    </div>
                   </header>
 
-              <main className="chat-container">
+              <main className="chat-container" ref={exportAreaRef} style={{ backgroundColor: '#1a1a1a' }}>
                 <div className="messages-area">
                   <div className="messages">
 
@@ -974,10 +1040,7 @@ function App() {
                 </>
               )}
             </div>
-          </div>
-          <div className="iphone-home-bar"></div>
-        </div>
-      </div>
+
 
       {lightboxImage && (
         <div className="lightbox-overlay" onClick={closeLightbox}>
