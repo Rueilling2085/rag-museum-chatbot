@@ -1626,10 +1626,9 @@ button, input, textarea, select {
 
 .landing-poster {
   width: 100%;
-  height: calc(100% + 80px);
+  height: 100%;
   object-fit: cover;
-  object-position: center top;
-  transform: translateY(80px);
+  object-position: right top;
 }
 
 .landing-poster-overlay {
