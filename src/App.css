@@ -1620,13 +1620,14 @@ button, input, textarea, select {
   width: 100%;
   height: 480px; 
   flex-shrink: 0;
+  background-color: #9a303a;
 }
 
 .landing-poster {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center top;
+  object-position: center 30px;
 }
 
 .landing-poster-overlay {
