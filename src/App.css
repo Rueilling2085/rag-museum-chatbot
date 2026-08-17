@@ -1621,13 +1621,15 @@ button, input, textarea, select {
   height: 480px; 
   flex-shrink: 0;
   background-color: #9a303a;
+  overflow: hidden;
 }
 
 .landing-poster {
   width: 100%;
-  height: 100%;
+  height: calc(100% + 80px);
   object-fit: cover;
-  object-position: center 30px;
+  object-position: center top;
+  transform: translateY(80px);
 }
 
 .landing-poster-overlay {
