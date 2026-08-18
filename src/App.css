@@ -45,8 +45,9 @@ body {
 }
 
 #root {
-  width: 393px;
-  height: 852px;
+  /* 桌機：固定 393×852；手機：自動縮至螢幕大小 */
+  width: min(393px, 100vw);
+  height: min(852px, 100dvh);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -54,18 +55,34 @@ body {
   background-color: #ffffff;
 }
 
-/* 真實手機上自適應全螢幕 */
-@media (max-width: 430px) {
-  body {
-    align-items: flex-start;
-    justify-content: flex-start;
-  }
-  #root {
-    width: 100vw;
-    height: 100dvh;
-    max-width: 100vw;
-    max-height: 100dvh;
-  }
+button, input, textarea, select {
+  font-family: inherit;
+}
+
+/* =========================
+   整體版面
+   ========================= */
+/* iPhone Wrapper & Frame (CSS kept for reference, not used in JSX) */
+.iphone-wrapper {
+  display: none;
+}
+
+.iphone-frame {
+  display: none;
+}
+
+.iphone-screen {
+  display: none;
+}
+
+/* Dynamic Island - NOT USED, kept for safety */
+.iphone-dynamic-island {
+  display: none;
+}
+
+/* Home Bar */
+.iphone-home-bar {
+  display: none;
 }
 
 button, input, textarea, select {
