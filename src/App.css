@@ -33,19 +33,33 @@
 
 body {
   margin: 0;
-  background-color: #ffffff;
+  background-color: #f2f2f7; /* iOS-style outside background */
   color: var(--text-main);
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   font-family: "Noto Sans TC", "Noto Sans", sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #root {
-  width: 100%;
-  height: 100%;
+  width: 393px;
+  height: 852px;
+  max-width: 393px;
+  max-height: 852px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background-color: #ffffff;
+  /* 在小螢幕裝置上自適應（例如真實手機瀏覽器） */
+  @media (max-width: 393px) {
+    width: 100vw;
+    height: 100vh;
+    max-width: 100vw;
+    max-height: 100vh;
+  }
 }
 
 button, input, textarea, select {
