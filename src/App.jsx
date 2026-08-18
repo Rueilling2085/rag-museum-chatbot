@@ -630,25 +630,25 @@ function App() {
     <>
       <div className="app-root">
         
-        {/* iOS Status Bar */}
+        {/* iOS Status Bar - traditional style */}
         <div className="ios-status-bar">
           <div className="ios-time">9:41</div>
-          <div className="ios-dynamic-island">
-            <div className="ios-camera"></div>
-          </div>
           <div className="ios-icons">
-            {/* Signal Icon */}
-            <svg className="ios-signal" viewBox="0 0 18 14" fill="currentColor">
-              <path d="M1 10.5h3V14H1v-3.5zm4.5-3.5h3V14h-3V7zm4.5-3.5h3V14h-3V3.5zm4.5-3.5h3V14h-3V0z"/>
+            {/* Signal bars */}
+            <svg className="ios-signal" viewBox="0 0 17 12" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="7" width="3" height="5" rx="0.8"/>
+              <rect x="4.5" y="4.5" width="3" height="7.5" rx="0.8"/>
+              <rect x="9" y="2" width="3" height="10" rx="0.8"/>
+              <rect x="13.5" y="0" width="3" height="12" rx="0.8"/>
             </svg>
-            {/* WiFi Icon */}
-            <svg className="ios-wifi" viewBox="0 0 21 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="10.5" cy="14.5" r="1.5" fill="currentColor"/>
-              <path d="M 7 11 A 5 5 0 0 1 14 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-              <path d="M 4 8 A 9.2 9.2 0 0 1 17 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-              <path d="M 1 5 A 13.5 13.5 0 0 1 20 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            {/* WiFi */}
+            <svg className="ios-wifi" viewBox="0 0 16 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="8" cy="11" r="1.2" fill="currentColor"/>
+              <path d="M5.2 8.3 A4 4 0 0 1 10.8 8.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              <path d="M2.8 5.8 A7.2 7.2 0 0 1 13.2 5.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              <path d="M0.4 3.3 A10.5 10.5 0 0 1 15.6 3.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
-            {/* Battery Icon */}
+            {/* Battery */}
             <div className="ios-battery">
               <div className="ios-battery-body">
                 <div className="ios-battery-level"></div>
