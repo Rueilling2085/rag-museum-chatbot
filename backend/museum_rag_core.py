@@ -985,9 +985,14 @@ Important:
         resp = _gemini_client.models.generate_content(
             model="gemini-2.5-flash-image",  
             contents=[prompt, image_part],
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"]
+            )
         )
     except Exception as e:
-        print("[RAG][IMG] 圖像生成請求失敗:", e)
+        import traceback
+        print(f"[RAG][IMG] 圖像生成請求失敗: {e}")
+        traceback.print_exc()
         return None
 
     out_bytes: Optional[bytes] = None
