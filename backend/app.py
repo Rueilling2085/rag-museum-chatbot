@@ -27,20 +27,10 @@ from museum_rag_core import (
 # ----------------------------------------------------------------------
 app = FastAPI(title="Museum RAG Backend")
 
-# CORS：允許 Vercel 前端與本地開發存取
-# 部署到 Render 後，請將 VERCEL_FRONTEND_URL 改為實際的 Vercel 網址
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",       # 本地開發
-    "http://localhost:3000",       # 本地開發備用
-]
-# 從環境變數讀取額外允許的來源（例如 Vercel 網域）
-_extra_origin = os.environ.get("FRONTEND_ORIGIN", "")
-if _extra_origin:
-    ALLOWED_ORIGINS.append(_extra_origin)
-
+# CORS 設定：允許 Vercel 前端與本地開發存取
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],  # 允許前端呼叫
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
