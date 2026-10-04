@@ -1,0 +1,25 @@
+﻿# Dockerfile.render
+# 純後端 Docker，供 Render 部署使用（前端已獨立部署至 Vercel）
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 安裝系統依賴（numpy/sklearn 需要 libgomp1）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 複製後端程式碼
+COPY backend/ ./backend/
+
+# 安裝 Python 依賴
+RUN pip install --no-cache-dir -r backend/requirements.txt
+
+# 建立必要資料夾
+RUN mkdir -p backend/logs backend/images/generated
+
+EXPOSE 10000
+
+# 切換到 backend 目錄執行
+WORKDIR /app/backend
+CMD uvicorn app:app --host 0.0.0.0 --port ${PORT:-10000}

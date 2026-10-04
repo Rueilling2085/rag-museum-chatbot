@@ -4,11 +4,6 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
-import mimetypes
-
-# Fix for Windows registry issues serving .js as text/plain
-mimetypes.add_type("application/javascript", ".js")
-mimetypes.add_type("application/javascript", ".mjs")
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,10 +27,20 @@ from museum_rag_core import (
 # ----------------------------------------------------------------------
 app = FastAPI(title="Museum RAG Backend")
 
-# CORS：允許前端（例如 localhost:5173）存取
+# CORS：允許 Vercel 前端與本地開發存取
+# 部署到 Render 後，請將 VERCEL_FRONTEND_URL 改為實際的 Vercel 網址
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",       # 本地開發
+    "http://localhost:3000",       # 本地開發備用
+]
+# 從環境變數讀取額外允許的來源（例如 Vercel 網域）
+_extra_origin = os.environ.get("FRONTEND_ORIGIN", "")
+if _extra_origin:
+    ALLOWED_ORIGINS.append(_extra_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 之後要鎖特定網域再改
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,7 +48,7 @@ app.add_middleware(
 
 # ----------------------------------------------------------------------
 # 靜態圖片掛載：把 images 資料夾掛在 IMAGES_WEB_ROOT（目前是 "/static"）
-# 這樣 /static/xxx.png 就會對應到 museum-backend/images/xxx.png
+# 這樣 /static/xxx.png 就會對應到 backend/images/xxx.png
 # ----------------------------------------------------------------------
 if os.path.exists(IMAGES_DIR):
     app.mount(
@@ -51,26 +56,6 @@ if os.path.exists(IMAGES_DIR):
         StaticFiles(directory=IMAGES_DIR),
         name="static",
     )
-
-# ----------------------------------------------------------------------
-# 前端整合：Serving Frontend from /dist
-# ----------------------------------------------------------------------
-# 在 Zeabur 上，前後端同一個 container，前端 dist 在 /app/dist，後端在 /app/backend
-# 所以 ../dist 相對路徑正確對應到 /app/dist
-FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "../dist")
-FRONTEND_ASSETS = os.path.join(FRONTEND_DIST, "assets")
-
-if os.path.exists(FRONTEND_ASSETS):
-    # 掛載 assets -> /assets
-    app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS), name="assets")
-
-@app.get("/")
-async def serve_frontend():
-    """Serve the React app index.html at root."""
-    index_path = os.path.join(FRONTEND_DIST, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"status": "ok", "message": "Backend running, but frontend not built."}
 
 # ----------------------------------------------------------------------
 # 對話紀錄：JSONL + Excel 匯出
@@ -323,17 +308,3 @@ async def export_logs_excel():
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
-
-# SPA fallback：所有未匹配的路由都回傳 index.html（支援 React Router）
-@app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
-    index_path = os.path.join(FRONTEND_DIST, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"status": "ok", "message": "Backend running, frontend not found."}
-
-@app.get("/debug/assets")
-async def debug_assets():
-    if os.path.exists(FRONTEND_ASSETS):
-        return {"files": os.listdir(FRONTEND_ASSETS)}
-    return {"error": "FRONTEND_ASSETS does not exist"}

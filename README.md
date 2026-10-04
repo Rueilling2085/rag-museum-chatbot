@@ -112,7 +112,7 @@ npm run dev
 | **後端框架** | Python FastAPI |
 | **語言與生成模型** | OpenAI GPT-4o-mini (文字), Google Gemini 2.5 (圖像) |
 | **嵌入與檢索技術** | intfloat/multilingual-e5-base, FAISS (向量), BM25 (關鍵字), TF-IDF (重排序) |
-| **開發與部署平台** | Gemini Antigravity |
+| **開發與部署平台** | 前端：Vercel / 後端：Render |
 
 ---
 

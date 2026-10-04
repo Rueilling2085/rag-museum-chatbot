@@ -1,0 +1,15 @@
+﻿services:
+  - type: web
+    name: museum-rag-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: OPENAI_API_KEY
+        sync: false          # 在 Render Dashboard 手動填入
+      - key: GOOGLE_API_KEY
+        sync: false          # 在 Render Dashboard 手動填入
+      - key: FRONTEND_ORIGIN
+        sync: false          # 填入你的 Vercel 網址，例如 https://museum-chatbot.vercel.app
+    healthCheckPath: /health
