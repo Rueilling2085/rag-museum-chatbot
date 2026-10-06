@@ -2,8 +2,6 @@
 
 為國立故宮博物院展覽設計並建構的 AI-native 檢索增強生成（RAG）對話系統。
 
-![對話式導覽截圖](docs/screenshot.png)
-
 ---
 
 ## Why rag-museum-chatbot?
