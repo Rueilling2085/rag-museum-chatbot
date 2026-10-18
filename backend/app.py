@@ -310,3 +310,53 @@ async def debug_image_status():
         "GOOGLE_API_KEY_status": masked_key,
     }
 
+@app.get("/debug/test-generate")
+async def debug_test_generate():
+    import traceback
+    from museum_rag_core import _gemini_client, smart_match_filename
+    from google.genai import types
+
+    if not _gemini_client:
+        return {"error": "_gemini_client is None"}
+    
+    img_path = smart_match_filename("瑪瑙花式碗")
+    if not img_path:
+        return {"error": "img_path not found"}
+        
+    try:
+        with open(img_path, "rb") as f:
+            img_bytes = f.read()
+        image_part = types.Part.from_bytes(mime_type="image/png", data=img_bytes)
+        
+        prompt = "Create a cinematic, photorealistic SCENE image placing this artifact into historical daily context."
+        resp = _gemini_client.models.generate_content(
+            model="gemini-2.5-flash-image",
+            contents=[prompt, image_part],
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"]
+            )
+        )
+        candidates_info = []
+        for cand in (getattr(resp, "candidates", []) or []):
+            parts_info = []
+            content = getattr(cand, "content", None)
+            if content:
+                for part in getattr(content, "parts", []):
+                    parts_info.append({
+                        "has_inline_data": getattr(part, "inline_data", None) is not None,
+                        "text": getattr(part, "text", None)
+                    })
+            candidates_info.append({"parts": parts_info})
+            
+        return {
+            "status": "success",
+            "candidates": candidates_info
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "exception_type": type(e).__name__,
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
+
