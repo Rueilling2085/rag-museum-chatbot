@@ -981,7 +981,7 @@ Important:
     """.strip()
 
     try:
-        print("[RAG][IMG] 呼叫 Gemini 2.5 圖像生成中...")
+        print(f"[RAG][IMG] 呼叫 Gemini 2.5 圖像生成中 (文物: {artifact_name})...")
         resp = _gemini_client.models.generate_content(
             model="gemini-2.5-flash-image",  
             contents=[prompt, image_part],
@@ -998,23 +998,35 @@ Important:
     out_bytes: Optional[bytes] = None
     try:
         candidates = getattr(resp, "candidates", []) or []
-        for cand in candidates:
+        print(f"[RAG][IMG] Gemini 回應 candidates 數量: {len(candidates)}")
+        for c_idx, cand in enumerate(candidates):
             content = getattr(cand, "content", None)
             if not content:
+                print(f"[RAG][IMG] candidate[{c_idx}] 無 content")
                 continue
-            for part in getattr(content, "parts", []):
+            parts = getattr(content, "parts", []) or []
+            print(f"[RAG][IMG] candidate[{c_idx}] parts 數量: {len(parts)}")
+            for p_idx, part in enumerate(parts):
                 inline = getattr(part, "inline_data", None)
-                if inline is not None and getattr(inline, "data", None):
-                    out_bytes = inline.data
-                    break
+                if inline is not None:
+                    data = getattr(inline, "data", None)
+                    if data:
+                        out_bytes = data
+                        print(f"[RAG][IMG] 成功提取圖片數據，大小: {len(out_bytes)} bytes")
+                        break
+                text = getattr(part, "text", None)
+                if text:
+                    print(f"[RAG][IMG] part[{p_idx}] 包含文字: {text[:100]}")
             if out_bytes:
                 break
     except Exception as e:
-        print("[RAG][IMG] 解析 Gemini 返回資料失敗:", e)
+        import traceback
+        print(f"[RAG][IMG] 解析 Gemini 返回資料失敗: {e}")
+        traceback.print_exc()
         return None
 
     if not out_bytes:
-        print("[RAG][IMG] 圖像生成未返回有效資料，請確認提示詞是否違規。")
+        print("[RAG][IMG] 圖像生成未返回有效資料，請確認提示詞或回應內容。")
         return None
 
     # 以問題 hash 作為檔名後綴確保唯一性，避免覆蓋舊圖
