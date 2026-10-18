@@ -298,3 +298,15 @@ async def export_logs_excel():
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+@app.get("/debug/image-status")
+async def debug_image_status():
+    from museum_rag_core import ENABLE_IMAGE_GEN, _gemini_client
+    key = os.environ.get("GOOGLE_API_KEY", "")
+    masked_key = f"{key[:4]}...{key[-4:]}" if len(key) > 8 else ("SET" if key else "MISSING")
+    return {
+        "ENABLE_IMAGE_GEN": ENABLE_IMAGE_GEN,
+        "has_gemini_client": _gemini_client is not None,
+        "GOOGLE_API_KEY_status": masked_key,
+    }
+
